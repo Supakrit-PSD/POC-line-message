@@ -2,9 +2,51 @@
 <html lang="th">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>POC LINE Message</title>
   </head>
   <body>
-    <h1>POC LINE Bot is running</h1>
+    <h1>POC LINE Message</h1>
+
+    <p id="status">กำลังโหลด...</p>
+
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script>
+      let accessToken = null;
+      let profile = null;
+
+      function show(text) {
+        document.querySelector('#status').textContent = text;
+      }
+
+      (async () => {
+        try {
+          const res = await fetch('/api/config');
+          const data = await res.json();
+          const liffId = data.liffId;
+
+          if (!liffId) {
+            show('โหมดทดสอบ (ไม่ได้ตั้ง LIFF_ID)');
+            return;
+          }
+
+          await liff.init({ liffId });
+
+          if (!liff.isLoggedIn()) {
+            show('กำลังพาไปล็อกอิน...');
+            liff.login();
+            return;
+          }
+
+          profile = await liff.getProfile();
+          accessToken = liff.getAccessToken();
+
+          show(`สวัสดี ${profile.displayName}`);
+        } catch (err) {
+          console.error(err);
+          show(`เกิดข้อผิดพลาด: ${err.message}`);
+        }
+      })();
+    </script>
   </body>
 </html>
