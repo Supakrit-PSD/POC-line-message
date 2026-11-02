@@ -1,0 +1,14 @@
+{
+  "name": "poc-line-message",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler pages dev",
+    "deploy": "wrangler pages deploy",
+    "logs": "wrangler pages deployment tail --project-name poc-line-message --environment production"
+  },
+  "devDependencies": {
+    "wrangler": "^4.151.0"
+  }
+}

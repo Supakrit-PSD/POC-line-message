@@ -1,0 +1,11 @@
+name = "poc-line-message"
+pages_build_output_dir = "public"
+compatibility_date = "2026-09-01"
+
+# ค่าที่ไม่ลับ — ส่งให้ browser ได้ จึงไม่ต้องเป็น secret
+# ปล่อยว่างไว้ = โหมดทดสอบ (หน้าเว็บไม่ต้องล็อกอิน / server ข้ามการตรวจ token)
+[vars]
+# LINE Login channel > LIFF > LIFF ID (เช่น 2012345678-AbCdEfGh)
+LIFF_ID = "2012328600-HMkSvCv6"
+# LINE Login channel > Basic settings > Channel ID (ตัวเลขล้วน) — ใช้ตรวจ access token ใน Phase 3
+LINE_LOGIN_CHANNEL_ID = "2012328600"

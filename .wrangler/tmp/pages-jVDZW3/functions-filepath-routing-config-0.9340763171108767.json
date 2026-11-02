@@ -1,0 +1,29 @@
+{
+  "routes": [
+    {
+      "routePath": "/api/config",
+      "mountPath": "/api",
+      "method": "GET",
+      "module": [
+        "api/config.js:onRequestGet"
+      ]
+    },
+    {
+      "routePath": "/api/notify",
+      "mountPath": "/api",
+      "method": "POST",
+      "module": [
+        "api/notify.js:onRequestPost"
+      ]
+    },
+    {
+      "routePath": "/webhook",
+      "mountPath": "/",
+      "method": "POST",
+      "module": [
+        "webhook.js:onRequestPost"
+      ]
+    }
+  ],
+  "baseURL": "/"
+}
