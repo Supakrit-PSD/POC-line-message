@@ -41,7 +41,20 @@
           profile = await liff.getProfile();
           accessToken = liff.getAccessToken();
 
-          show(`สวัสดี ${profile.displayName}`);
+          const whoami = await fetch('/api/whoami',
+            {
+              method : "POST",
+              headers : {
+                "Content-Type" : "application/json"
+              },
+              body : JSON.stringify({
+                accessToken
+              })
+            }
+          )
+          const whoamiData = await whoami.json();
+
+          show(`browser: ${profile.displayName} / server: ${who.profile?.displayName}`);
         } catch (err) {
           console.error(err);
           show(`เกิดข้อผิดพลาด: ${err.message}`);
