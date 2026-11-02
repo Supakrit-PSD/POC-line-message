@@ -4,14 +4,34 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>POC LINE Message</title>
+    <style>
+      body { font-family: system-ui, -apple-system, "Helvetica Neue", sans-serif; margin: 0; padding: 16px; line-height: 1.6; }
+      h1 { font-size: 20px; margin: 0 0 8px; }
+      #status { padding: 8px 12px; background: #f1f3f5; border-radius: 6px; margin: 0 0 16px; }
+      .field { margin-bottom: 16px; }
+      .field label.title { display: block; font-weight: 600; margin-bottom: 4px; }
+      input, textarea { width: 100%; box-sizing: border-box; padding: 8px; font: inherit; border: 1px solid #ced4da; border-radius: 6px; }
+      textarea { min-height: 72px; }
+      .options { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+      .options label { border: 1px solid #ced4da; border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+      .missing input, .missing textarea, .missing .options { outline: 2px solid #e03131; }
+      button { width: 100%; padding: 12px; font: inherit; font-weight: 600; color: #fff; background: #06c755; border: 0; border-radius: 6px; }
+      button:disabled { background: #adb5bd; }
+    </style>
   </head>
   <body>
-    <h1>POC LINE Message</h1>
-
+    <h1>แบบฟอร์มแจ้งเหตุ</h1>
     <p id="status">กำลังโหลด...</p>
 
+    <form id="form"></form>
+    <button id="submit">ส่งรายงาน</button>
+
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-    <script>
+    <script type="module">
+      import { FIELDS } from './field.js';
+
+      const DRAFT_KEY = 'report-draft';
+
       let accessToken = null;
       let profile = null;
 
@@ -19,11 +39,169 @@
         document.querySelector('#status').textContent = text;
       }
 
+      // ---------- สร้างฟอร์มจาก FIELDS ----------
+
+      // choice ได้ radio เป็นปุ่มกลม + ช่องรายละเอียด
+      // ที่เหลือ: textarea ได้ <textarea> นอกนั้นได้ <input type="<f.type>"> ตรง ๆ
+      function renderFields() {
+        const form = document.querySelector('#form');
+
+        for (const f of FIELDS) {
+          const wrap = document.createElement('div');
+          wrap.className = 'field';
+          wrap.id = `field-${f.key}`;
+
+          const title = document.createElement('label');
+          title.className = 'title';
+          title.textContent = f.label;
+          wrap.append(title);
+
+          if (f.type === 'choice') {
+            const options = document.createElement('div');
+            options.className = 'options';
+            for (const opt of f.options) {
+              const label = document.createElement('label');
+              const radio = document.createElement('input');
+              radio.type = 'radio';
+              radio.name = f.key;       // name เดียวกัน = เลือกได้ทีละอัน
+              radio.value = opt;
+              label.append(radio, ` ${opt}`);
+              options.append(label);
+            }
+            wrap.append(options);
+
+            const detail = document.createElement('input');
+            detail.type = 'text';
+            detail.id = `${f.key}__detail`;
+            detail.placeholder = f.detailPlaceholder || '';
+            detail.maxLength = f.max;
+            wrap.append(detail);
+          } else {
+            const input = document.createElement(f.type === 'textarea' ? 'textarea' : 'input');
+            if (f.type !== 'textarea') input.type = f.type;
+            input.id = f.key;
+            if (f.type !== 'datetime-local') input.maxLength = f.max;
+            wrap.append(input);
+          }
+
+          form.append(wrap);
+        }
+      }
+
+      // ---------- อ่านค่ากลับออกมา ----------
+
+      // คืน values (ค่าที่กรอก) และ missing (label ของข้อที่ยังว่าง) พร้อมกัน
+      function collectFields() {
+        const values = {};
+        const missing = [];
+
+        for (const f of FIELDS) {
+          let value = '';
+
+          if (f.type === 'choice') {
+            const picked = document.querySelector(`input[name="${f.key}"]:checked`);
+            const detail = document.querySelector(`#${f.key}__detail`).value.trim();
+            if (picked) value = detail ? `${picked.value} — ${detail}` : picked.value;
+          } else {
+            value = document.querySelector(`#${f.key}`).value.trim();
+          }
+
+          const wrap = document.querySelector(`#field-${f.key}`);
+          if (value) {
+            values[f.key] = value.slice(0, f.max);
+            wrap.classList.remove('missing');
+          } else {
+            missing.push(f.label);
+            wrap.classList.add('missing');
+          }
+        }
+
+        return { values, missing };
+      }
+
+      // ---------- draft: หน้า LIFF ถูกปิด/รีเฟรชง่ายมาก ----------
+
+      function saveDraft() {
+        try {
+          const draft = {};
+          for (const f of FIELDS) {
+            if (f.type === 'choice') {
+              const picked = document.querySelector(`input[name="${f.key}"]:checked`);
+              draft[f.key] = picked ? picked.value : '';
+              draft[`${f.key}__detail`] = document.querySelector(`#${f.key}__detail`).value;
+            } else {
+              draft[f.key] = document.querySelector(`#${f.key}`).value;
+            }
+          }
+          localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+        } catch {} // โหมดส่วนตัวของเบราว์เซอร์เขียนไม่ได้ ไม่ใช่เรื่องคอขาดบาดตาย
+      }
+
+      function loadDraft() {
+        try {
+          const draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}');
+          for (const f of FIELDS) {
+            if (f.type === 'choice') {
+              if (draft[f.key]) {
+                const radio = document.querySelector(`input[name="${f.key}"][value="${draft[f.key]}"]`);
+                if (radio) radio.checked = true;
+              }
+              document.querySelector(`#${f.key}__detail`).value = draft[`${f.key}__detail`] || '';
+            } else if (draft[f.key]) {
+              document.querySelector(`#${f.key}`).value = draft[f.key];
+            }
+          }
+        } catch {}
+      }
+
+      // ---------- ส่ง ----------
+
+      const submitButton = document.querySelector('#submit');
+
+      submitButton.addEventListener('click', async () => {
+        const { values, missing } = collectFields();
+
+        if (missing.length) {
+          show(`ยังไม่ได้กรอก ${missing.length} ข้อ: ${missing.join(', ')}`);
+          document.querySelector('.missing')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+
+        submitButton.disabled = true;   // กันกดซ้ำระหว่างรอ
+        show('กำลังส่ง...');
+
+        try {
+          const res = await fetch('/api/report', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accessToken, fields: values }),
+          });
+          const data = await res.json();
+
+          if (!data.ok) throw new Error(data.error || 'ส่งไม่สำเร็จ');
+
+          localStorage.removeItem(DRAFT_KEY);
+          show('ส่งเข้ากลุ่มเรียบร้อยแล้ว');
+          document.querySelector('#form').reset();
+        } catch (err) {
+          console.error(err);
+          show(`ส่งไม่สำเร็จ: ${err.message}`);
+        } finally {
+          submitButton.disabled = false;
+        }
+      });
+
+      // ---------- เริ่มทำงาน ----------
+
+      // สร้างฟอร์มก่อนแตะ LIFF เลย ถ้าล็อกอินพังอย่างน้อยผู้ใช้ยังเห็นว่าหน้านี้มีอะไร
+      renderFields();
+      loadDraft();
+      document.querySelector('#form').addEventListener('input', saveDraft);
+
       (async () => {
         try {
           const res = await fetch('/api/config');
-          const data = await res.json();
-          const liffId = data.liffId;
+          const { liffId } = await res.json();
 
           if (!liffId) {
             show('โหมดทดสอบ (ไม่ได้ตั้ง LIFF_ID)');
@@ -35,26 +213,13 @@
           if (!liff.isLoggedIn()) {
             show('กำลังพาไปล็อกอิน...');
             liff.login();
-            return;
+            return;   // login() พาออกจากหน้านี้ โค้ดใต้บรรทัดนี้ไม่ทำงาน
           }
 
           profile = await liff.getProfile();
           accessToken = liff.getAccessToken();
 
-          const whoami = await fetch('/api/whoami',
-            {
-              method : "POST",
-              headers : {
-                "Content-Type" : "application/json"
-              },
-              body : JSON.stringify({
-                accessToken
-              })
-            }
-          )
-          const whoamiData = await whoami.json();
-
-          show(`browser: ${profile.displayName} / server: ${who.profile?.displayName}`);
+          show(`ผู้แจ้ง: ${profile.displayName}`);
         } catch (err) {
           console.error(err);
           show(`เกิดข้อผิดพลาด: ${err.message}`);
